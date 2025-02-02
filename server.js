@@ -21,12 +21,12 @@ app.prepare().then(() => {
   const httpServer = createServer(expressApp);
 
   const io = new Server(httpServer, {
-    path: '/api/socket',
+    path: '/pages/api/socket',
     cors: { origin: '*' }
   });
 
   // Game creation endpoint
-  expressApp.post('/api/games', async (req, res) => {
+  expressApp.post('/pages/api/games', async (req, res) => {
     try {
       const newGame = await prisma.game.create({
         data: { status: 'waiting' }
@@ -48,7 +48,7 @@ app.prepare().then(() => {
 
 
   // Update the games endpoint
-  expressApp.get('/api/games', async (req, res) => {
+  expressApp.get('/pages/api/games', async (req, res) => {
     try {
       const games = await prisma.game.findMany({
         orderBy: { createdAt: 'desc' },
