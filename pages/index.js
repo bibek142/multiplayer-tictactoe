@@ -47,8 +47,11 @@ export default function Home() {
     socketRef.current = io(
       process.env.NEXT_PUBLIC_SITE_URL || window.location.origin,
       {
-        path: '/api/socket',
-        transports: ['websocket'],
+        path: "/api/socket",
+        transports: ["websocket"],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
         withCredentials: true
       }
     );
@@ -56,6 +59,7 @@ export default function Home() {
     socketRef.current.on("connect", () => {
       setIsConnected(true);
       setTransport(socketRef.current.io.engine.transport.name);
+      showNotification('Connected to game server', 'success');
     });
 
     socketRef.current.io.engine.on("upgrade", (transport) => {

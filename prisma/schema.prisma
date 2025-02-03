@@ -18,6 +18,7 @@ model Game {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   players   String[]
   moves     String[]  @default([])
+  chat      String[]
   status    String    @default("waiting")
   winner    String?
   createdAt DateTime  @default(now())

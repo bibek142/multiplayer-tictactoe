@@ -16,8 +16,10 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: "/(.*)",
+        source: '/api/socket',
         headers: [
+          { key: 'Connection', value: 'Upgrade' },
+          { key: 'Upgrade', value: 'websocket' },
           {
             key: "Content-Security-Policy",
             value: "script-src 'self' 'unsafe-eval' 'unsafe-inline'; connect-src 'self' ws://localhost:3000;",

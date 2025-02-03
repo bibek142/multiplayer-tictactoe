@@ -18,10 +18,22 @@ export default function SocketHandler(req, res) {
 
   const io = new Server(res.socket.server, {
     path: '/api/socket',
-    cors: { origin: '*' }
+    cors: {
+      origin: process.env.NEXT_PUBLIC_SITE_URL,
+      methods: ["GET", "POST"],
+      credentials: true
+    },
+    transports: ["websocket"]
   });
 
-  res.socket.server.io = io;
+  io.use((socket, next) => {
+    const origin = socket.handshake.headers.origin;
+    if (origin === process.env.NEXT_PUBLIC_SITE_URL) {
+      next();
+    } else {
+      next(new Error("Origin not allowed"));
+    }
+  });
 
   io.on('connection', (socket) => {
     console.log('✅ Client connected:', socket.id);
@@ -168,7 +180,7 @@ export default function SocketHandler(req, res) {
 
 
   });
-
+  res.socket.server.io = io;
   res.end();
 }
 
