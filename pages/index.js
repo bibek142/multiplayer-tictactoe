@@ -16,6 +16,10 @@ export default function Home() {
   const [gameHistory, setGameHistory] = useState([]);
   const [isCreatingGame, setIsCreatingGame] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [isConnected, setIsConnected] = useState(false);
+  const [transport, setTransport] = useState("N/A");
+
+
 
 
   const formatISTDate = (dateString) => {
@@ -40,10 +44,33 @@ export default function Home() {
   };
 
   useEffect(() => {
-    socketRef.current = io({
-      path: '/api/socket',
-      transports: ['websocket']
+    socketRef.current = io(
+      process.env.NEXT_PUBLIC_SITE_URL || window.location.origin,
+      {
+        path: '/api/socket',
+        transports: ['websocket'],
+        withCredentials: true
+      }
+    );
+
+    socketRef.current.on("connect", () => {
+      setIsConnected(true);
+      setTransport(socketRef.current.io.engine.transport.name);
     });
+
+    socketRef.current.io.engine.on("upgrade", (transport) => {
+      setTransport(transport.name);
+    });
+
+    socketRef.current.on("disconnect", () => {
+      setIsConnected(false);
+      setTransport("N/A");
+    });
+
+    socketRef.current.on("connect_error", (err) => {
+      showNotification(`Connection error: ${err.message}`, 'error');
+    });
+
 
     socketRef.current.on('game-update', (update) => {
       switch (update.type) {
@@ -82,7 +109,11 @@ export default function Home() {
       }
     });
 
-    return () => socketRef.current?.disconnect();
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+    };
   }, []);
 
 
