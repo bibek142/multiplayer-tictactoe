@@ -2,6 +2,7 @@ import Head from 'next/head';
 import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import styles from '../styles/Home.module.css';
+import Pusher from 'pusher-js';
 
 export default function Home() {
   const socketRef = useRef(null);
@@ -19,6 +20,17 @@ export default function Home() {
   const [isConnected, setIsConnected] = useState(false);
   const [transport, setTransport] = useState("N/A");
 
+
+
+
+  const pusher = new Pusher(process.env.PUSHER_KEY, {
+    cluster: process.env.PUSHER_CLUSTER,
+  });
+
+  const channel = pusher.subscribe('teal-towel-980');
+  channel.bind('my-event', (data) => {
+    console.log('Received data:', data);
+  });
 
 
 
