@@ -3,7 +3,7 @@ const { parse } = require('url');
 const next = require('next');
 const { Server } = require('socket.io');
 const { PrismaClient } = require('@prisma/client');
-let serverInstance = null;
+
 
 const prisma = new PrismaClient();
 const dev = process.env.NODE_ENV !== 'production';
@@ -19,23 +19,24 @@ const winCombos = [
 
 // Add origin validation middleware
 const allowedOrigins = [
-  process.env.NEXT_PUBLIC_SITE_URL,
-  'http://localhost:3000'
+  process.env.NEXT_PUBLIC_SITE_URL
 ];
 
+
+let httpServer;
+
 app.prepare().then(() => {
-  const server = createServer((req, res) => {
+  httpServer = createServer((req, res) => {
     const parsedUrl = parse(req.url, true);
     handle(req, res, parsedUrl);
   });
 
-  serverInstance = server; // Store reference
+  
 
-  const io = new Server(server, {
+  const io = new Server(httpServer, {
     cors: {
       origin: [
-        process.env.NEXT_PUBLIC_SITE_URL,
-        "http://localhost:3000"
+        process.env.NEXT_PUBLIC_SITE_URL
       ],
       methods: ["GET", "POST"],
       credentials: true
@@ -102,11 +103,11 @@ app.prepare().then(() => {
           where: { id: gameId },
           select: { status: true }
         });
-    
+
         if (!dbGame) {
           return callback({ error: 'Invalid game ID' });
         }
-    
+
         // 2. Check/initialize active game state
         let game = activeGames.get(gameId);
         if (!game) {
@@ -119,23 +120,23 @@ app.prepare().then(() => {
           };
           activeGames.set(gameId, game);
         }
-    
+
         // 3. Validate game capacity
         if (game.players.size >= 2) {
           return callback({ error: 'Game full' });
         }
-    
+
         // 4. Assign player symbol
         const symbol = game.players.size === 0 ? 'X' : 'O';
-        game.players.set(socket.id, { 
-          name: playerName, 
+        game.players.set(socket.id, {
+          name: playerName,
           symbol,
           joinedAt: new Date()
         });
-    
+
         // 5. Join game room
         socket.join(gameId);
-    
+
         // 6. Send initial game state to joining player
         callback({
           symbol,
@@ -145,14 +146,14 @@ app.prepare().then(() => {
           currentPlayer: game.currentPlayer,
           status: game.status
         });
-    
+
         // 7. Broadcast updated player list
         io.to(gameId).emit('game-update', {
           type: 'players',
           players: Array.from(game.players.values()),
           currentPlayer: game.currentPlayer
         });
-    
+
         // 8. Start game if 2 players
         if (game.players.size === 2 && game.status === 'waiting') {
           game.status = 'playing';
@@ -160,19 +161,19 @@ app.prepare().then(() => {
             type: 'status',
             status: 'playing'
           });
-          
+
           // Update database status
           await prisma.game.update({
             where: { id: gameId },
             data: { status: 'playing' }
           });
         }
-    
+
       } catch (error) {
         console.error('Join error:', error);
-        callback({ 
+        callback({
           error: 'Join failed',
-          message: error.message 
+          message: error.message
         });
       }
     });
@@ -274,17 +275,25 @@ app.prepare().then(() => {
   }
 
   const port = process.env.PORT || 3000;
-  server.listen(port, () => {
+  httpServer.listen(port, () => {
     console.log(`> Ready on http://localhost:${port}`);
   });
 });
 
 process.on('SIGTERM', () => {
   console.log('SIGTERM signal received');
-  if (serverInstance) {
-    serverInstance.close(() => {
+  
+  if (httpServer) {
+    httpServer.close(() => {
       console.log('HTTP server closed');
-      prisma.$disconnect();
+      prisma.$disconnect()
+        .then(() => process.exit(0))
+        .catch((err) => {
+          console.error('Prisma disconnect error:', err);
+          process.exit(1);
+        });
     });
+  } else {
+    process.exit(0);
   }
 });

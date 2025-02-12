@@ -42,13 +42,13 @@ export default function Home() {
     socketRef.current = io(
       process.env.NEXT_PUBLIC_SITE_URL,
       {
+        path: "/socket.io/",
         transports: ["websocket"],
         upgrade: false,
         reconnection: true,
         reconnectionAttempts: 10,
         reconnectionDelay: 3000,
         forceNew: true,
-        path: "/socket.io/",
         withCredentials: true,
         query: {
           clientType: "browser"
