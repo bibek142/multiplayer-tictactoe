@@ -1,42 +1,73 @@
-import { Server } from 'socket.io';
-import { PrismaClient } from '@prisma/client';
+const { createServer } = require('http');
+const { parse } = require('url');
+const next = require('next');
+const { Server } = require('socket.io');
+const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
+const dev = process.env.NODE_ENV !== 'production';
+const app = next({ dev });
+const handle = app.getRequestHandler();
 const activeGames = new Map();
 const winCombos = [
-  [0,1,2], [3,4,5], [6,7,8],
-  [0,3,6], [1,4,7], [2,5,8],
-  [0,4,8], [2,4,6]
+  [0, 1, 2], [3, 4, 5], [6, 7, 8],
+  [0, 3, 6], [1, 4, 7], [2, 5, 8],
+  [0, 4, 8], [2, 4, 6]
 ];
 
-export default function SocketHandler(req, res) {
-  if (res.socket.server.io) {
-    console.log('Socket.io already initialized');
-    res.end();
-    return;
-  }
 
-  const io = new Server(res.socket.server, {
-    path: '/api/socket',
+// Add origin validation middleware
+const allowedOrigins = [
+  process.env.NEXT_PUBLIC_SITE_URL,
+  'http://localhost:3000'
+];
+
+app.prepare().then(() => {
+  const server = createServer((req, res) => {
+    const parsedUrl = parse(req.url, true);
+    handle(req, res, parsedUrl);
+  });
+
+  const io = new Server(server, {
     cors: {
-      origin: process.env.NEXT_PUBLIC_SITE_URL,
+      origin: [
+        process.env.NEXT_PUBLIC_SITE_URL,
+        "http://localhost:3000"
+      ],
       methods: ["GET", "POST"],
       credentials: true
     },
-    transports: ["websocket"]
+    transports: ["websocket"],
+    path: "/socket.io/", // Explicit WebSocket path
+    pingInterval: 25000,
+    pingTimeout: 60000
   });
 
+  // Add connection validation
   io.use((socket, next) => {
     const origin = socket.handshake.headers.origin;
-    if (origin === process.env.NEXT_PUBLIC_SITE_URL) {
+    if (allowedOrigins.includes(origin)) {
       next();
     } else {
       next(new Error("Origin not allowed"));
     }
   });
 
+
+
   io.on('connection', (socket) => {
-    console.log('✅ Client connected:', socket.id);
+    console.log(`✅ Client connected: ${socket.id} via ${socket.conn.transport.name}`);
+
+    socket.conn.on("upgrade", () => {
+      console.log(`⬆️ Transport upgraded to: ${socket.conn.transport.name}`);
+    });
+
+    socket.conn.on("close", (reason) => {
+      console.log(`❌ Connection closed: ${reason}`);
+    });
+
+    // Keep existing socket.io handlers from pages/api/socket.js
+    // [PASTE ALL YOUR SOCKET.IO LOGIC HERE]
 
     // Game creation handler
     socket.on('create-game', async (callback) => {
@@ -58,6 +89,8 @@ export default function SocketHandler(req, res) {
         callback({ error: 'Game creation failed' });
       }
     });
+
+
 
     socket.on('join-game', async (gameId, playerName, callback) => {
       try {
@@ -104,22 +137,22 @@ export default function SocketHandler(req, res) {
     socket.on('make-move', async ({ gameId, index }) => {
       const game = activeGames.get(gameId);
       if (!game || game.status !== 'playing') return;
-    
+
       const player = game.players.get(socket.id);
       if (!player || player.symbol !== game.currentPlayer) return;
-    
+
       // Check for empty string instead of null
       if (game.board[index] === '') {
         game.board[index] = player.symbol;
         game.currentPlayer = game.currentPlayer === 'X' ? 'O' : 'X';
-    
+
         const winner = checkWinner(game.board);
         const isDraw = !winner && game.board.every(cell => cell !== '');
-    
+
         if (winner || isDraw) {
           game.status = 'finished';
           const result = winner ? player.symbol : 'draw';
-    
+
           // Update database
           await prisma.game.update({
             where: { id: gameId },
@@ -130,7 +163,7 @@ export default function SocketHandler(req, res) {
               moves: game.board
             }
           });
-    
+
           io.to(gameId).emit('game-update', {
             type: 'game-over',
             winner: result,
@@ -165,6 +198,8 @@ export default function SocketHandler(req, res) {
       }
     });
 
+
+
     socket.on('disconnect', () => {
       activeGames.forEach((game, gameId) => {
         if (game.players.delete(socket.id)) {
@@ -179,13 +214,30 @@ export default function SocketHandler(req, res) {
 
 
 
-  });
-  res.socket.server.io = io;
-  res.end();
-}
+    socket.on('error', (error) => {
+      console.error('Socket error:', error);
+    });
 
-function checkWinner(board) {
-  return winCombos.some(combo => 
-    combo.every(i => board[i] !== '' && board[i] === board[combo[0]])
-  );
-}
+  });
+
+
+
+  function checkWinner(board) {
+    return winCombos.some(combo =>
+      combo.every(i => board[i] !== '' && board[i] === board[combo[0]])
+    );
+  }
+
+  const port = process.env.PORT || 3000;
+  server.listen(port, () => {
+    console.log(`> Ready on http://localhost:${port}`);
+  });
+});
+
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal received');
+  server.close(() => {
+    console.log('HTTP server closed');
+    prisma.$disconnect();
+  });
+});

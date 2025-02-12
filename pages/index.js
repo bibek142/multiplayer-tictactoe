@@ -2,7 +2,6 @@ import Head from 'next/head';
 import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import styles from '../styles/Home.module.css';
-import Pusher from 'pusher-js';
 
 export default function Home() {
   const socketRef = useRef(null);
@@ -17,22 +16,6 @@ export default function Home() {
   const [gameHistory, setGameHistory] = useState([]);
   const [isCreatingGame, setIsCreatingGame] = useState(false);
   const [notifications, setNotifications] = useState([]);
-  const [isConnected, setIsConnected] = useState(false);
-  const [transport, setTransport] = useState("N/A");
-
-
-
-
-  const pusher = new Pusher(process.env.PUSHER_KEY, {
-    cluster: process.env.PUSHER_CLUSTER,
-  });
-
-  const channel = pusher.subscribe('teal-towel-980');
-  channel.bind('my-event', (data) => {
-    console.log('Received data:', data);
-  });
-
-
 
   const formatISTDate = (dateString) => {
     const options = {
@@ -57,36 +40,31 @@ export default function Home() {
 
   useEffect(() => {
     socketRef.current = io(
-      process.env.NEXT_PUBLIC_SITE_URL || window.location.origin,
+      process.env.NEXT_PUBLIC_SITE_URL,
       {
-        path: "/api/socket",
         transports: ["websocket"],
+        upgrade: false,
         reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
-        withCredentials: true
+        reconnectionAttempts: 10,
+        reconnectionDelay: 3000,
+        forceNew: true,
+        path: "/socket.io/",
+        query: {
+          clientType: "browser"
+        }
       }
     );
 
     socketRef.current.on("connect", () => {
-      setIsConnected(true);
-      setTransport(socketRef.current.io.engine.transport.name);
       showNotification('Connected to game server', 'success');
     });
 
-    socketRef.current.io.engine.on("upgrade", (transport) => {
-      setTransport(transport.name);
-    });
-
-    socketRef.current.on("disconnect", () => {
-      setIsConnected(false);
-      setTransport("N/A");
-    });
-
     socketRef.current.on("connect_error", (err) => {
-      showNotification(`Connection error: ${err.message}`, 'error');
+      console.error("Connection error:", err);
+      if (err.message === "xhr poll error") {
+        showNotification("Connection lost - trying to reconnect...", "error");
+      }
     });
-
 
     socketRef.current.on('game-update', (update) => {
       switch (update.type) {
@@ -130,8 +108,7 @@ export default function Home() {
         socketRef.current.disconnect();
       }
     };
-  }, []);
-
+  }, [mySymbol]); // Added mySymbol as dependency
 
   // Fetch game history
   useEffect(() => {
@@ -146,30 +123,22 @@ export default function Home() {
     };
 
     fetchHistory();
-    const interval = setInterval(fetchHistory, 5000); // Refresh every 5 seconds
-
+    const interval = setInterval(fetchHistory, 5000);
     return () => clearInterval(interval);
   }, [screen]);
 
-
-
-
   const handleCreateGame = async () => {
     setIsCreatingGame(true);
-    try {
-      const res = await fetch('/api/games', { method: 'POST' });
-      const { id } = await res.json();
-      setGameId(id);
-      showNotification(`Game created! ID: ${id}`, 'success');
-    } catch (error) {
-      showNotification('Failed to create game', 'error');
-    } finally {
+    socketRef.current.emit('create-game', (response) => {
+      if (response.success) {
+        setGameId(response.gameId);
+        showNotification(`Game created! ID: ${response.gameId}`, 'success');
+      } else {
+        showNotification(response.error, 'error');
+      }
       setIsCreatingGame(false);
-    }
+    });
   };
-
-
-
 
   const handleJoinGame = async (e) => {
     e.preventDefault();
@@ -190,15 +159,11 @@ export default function Home() {
     });
   };
 
-
-
   const handleMove = (index) => {
     if (mySymbol === currentPlayer && board[index] === '') {
       socketRef.current.emit('make-move', { gameId, index });
     }
   };
-
-
 
   const handleMessage = (e) => {
     e.preventDefault();
@@ -209,12 +174,8 @@ export default function Home() {
     }
   };
 
-
-
-
   return (
     <div className={styles.container}>
-
       <Head>
         <title>TicTacToe - A Multiplayer Online Game</title>
       </Head>
@@ -288,7 +249,6 @@ export default function Home() {
               </div>
             </div>
 
-
             <div className={styles.board}>
               {board.map((cell, index) => (
                 <button
@@ -297,7 +257,7 @@ export default function Home() {
                   onClick={() => handleMove(index)}
                   disabled={cell !== '' || currentPlayer !== mySymbol}
                 >
-                  {cell || ''} {/* Explicit empty string for empty cells */}
+                  {cell || ''}
                 </button>
               ))}
             </div>
@@ -348,7 +308,7 @@ export default function Home() {
                   <div className={styles.players}>
                     {game.players?.map((player, i) => (
                       <span key={i} className={styles.playerTag}>
-                        {player} {i === 0 ? '(X)' : '(O)'}
+                        {player || 'Anonymous'} {i === 0 ? '(X)' : '(O)'}
                       </span>
                     ))}
                   </div>
