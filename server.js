@@ -19,7 +19,8 @@ const winCombos = [
 
 // Add origin validation middleware
 const allowedOrigins = [
-  process.env.NEXT_PUBLIC_SITE_URL
+  process.env.NEXT_PUBLIC_SITE_URL,
+  "http://localhost:3000"
 ];
 
 
@@ -36,7 +37,9 @@ app.prepare().then(() => {
   const io = new Server(httpServer, {
     cors: {
       origin: [
-        process.env.NEXT_PUBLIC_SITE_URL
+        process.env.NEXT_PUBLIC_SITE_URL,
+        "http://localhost:3000"
+
       ],
       methods: ["GET", "POST"],
       credentials: true
