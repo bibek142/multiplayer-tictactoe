@@ -2,8 +2,14 @@
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
-  experimental: {
-    serverComponentsExternalPackages: ['@prisma/client']
+  // Remove experimental config
+  webpack: (config) => {
+    config.resolve.fallback = { 
+      fs: false,
+      net: false,
+      tls: false 
+    };
+    return config;
   }
 };
 

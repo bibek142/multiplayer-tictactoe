@@ -49,6 +49,7 @@ export default function Home() {
         reconnectionDelay: 3000,
         forceNew: true,
         path: "/socket.io/",
+        withCredentials: true,
         query: {
           clientType: "browser"
         }
