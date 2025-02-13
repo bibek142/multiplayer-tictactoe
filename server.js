@@ -18,10 +18,13 @@ const winCombos = [
 
 
 // Add origin validation middleware
-const allowedOrigins = [
-  process.env.NEXT_PUBLIC_SITE_URL,
-  "http://localhost:3000"
-];
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? [process.env.NEXT_PUBLIC_SITE_URL]
+  : [
+    process.env.NEXT_PUBLIC_SITE_URL,
+    'http://localhost:3000',
+    'http://127.0.0.1:3000'
+  ];
 
 
 let httpServer;
@@ -32,15 +35,11 @@ app.prepare().then(() => {
     handle(req, res, parsedUrl);
   });
 
-  
+
 
   const io = new Server(httpServer, {
     cors: {
-      origin: [
-        process.env.NEXT_PUBLIC_SITE_URL,
-        "http://localhost:3000"
-
-      ],
+      origin: allowedOrigins,
       methods: ["GET", "POST"],
       credentials: true
     },
@@ -54,10 +53,9 @@ app.prepare().then(() => {
   io.use((socket, next) => {
     const origin = socket.handshake.headers.origin;
     if (allowedOrigins.includes(origin)) {
-      next();
-    } else {
-      next(new Error("Origin not allowed"));
+      return next();
     }
+    return next(new Error('Origin not allowed'));
   });
 
 
@@ -278,14 +276,14 @@ app.prepare().then(() => {
   }
 
   const port = process.env.PORT || 3000;
-  httpServer.listen(port, () => {
-    console.log(`> Ready on http://localhost:${port}`);
+  httpServer.listen(port, '0.0.0.0', () => {
+    console.log(`> Server ready on port ${port}`);
   });
 });
 
 process.on('SIGTERM', () => {
   console.log('SIGTERM signal received');
-  
+
   if (httpServer) {
     httpServer.close(() => {
       console.log('HTTP server closed');
