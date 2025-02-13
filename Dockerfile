@@ -42,7 +42,8 @@ COPY --from=builder /app/.next/server ./.next/server
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -u 1001 -S nextjs -G nodejs && \
-    chown -R nextjs:nodejs /app
+    chown -R nextjs:nodejs /app/.next
+RUN chmod -R 755 /app/.next/standalone/server.js
 
 USER nextjs
 

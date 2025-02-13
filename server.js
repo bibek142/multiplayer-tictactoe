@@ -276,8 +276,9 @@ app.prepare().then(() => {
   }
 
   const port = process.env.PORT || 3000;
-  httpServer.listen(port, '0.0.0.0', () => {
-    console.log(`> Server ready on port ${port}`);
+  const host = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
+  httpServer.listen(port, host, () => {
+    console.log(`> Server running on ${host}:${port}`);
   });
 });
 
